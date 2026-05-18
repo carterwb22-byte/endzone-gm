@@ -15,7 +15,7 @@ const LEAGUE_BASE_CONTEXT = `You are a fantasy football GM assistant for Carter 
 LEAGUE INFO:
 - Name: The Endzone Booty Blitz
 - Format: 12-team PPR Dynasty with IDP
-- Roster spots: QB, RB, RB, WR, WR, TE, FLEX, REC_FLEX, SUPER_FLEX, K, IDP_FLEX x3, + 14 bench spots
+- Roster spots: QB, RB, RB, WR, WR, TE, FLEX, REC_FLEX, SUPER_FLEX, K, IDP_FLEX x3, 14 bench spots
 - Best ball scoring, 2026 season
 - 6 playoff teams, trade deadline Week 11, 3 draft rounds
 - Divisions: "Horned Up North" vs "Sloppy Toppy South"
@@ -23,32 +23,32 @@ LEAGUE INFO:
 TEAMS:
 1. Schrodiziak (Horned Up North)
 2. Toby's Tankers (Horned Up North)
-3. cartberr / Carter Berry (Sloppy Toppy South) ← THE USER
+3. cartberr / Carter Berry (Sloppy Toppy South) - THE USER
 4. KevinHannah (Sloppy Toppy South)
 5. BickNoyle (Sloppy Toppy South)
 6. ecjaeger2315 (Horned Up North)
 7. apeterson2018 (Horned Up North)
 8. HubeeDoobie (Horned Up North)
-9. Brandón Schroedlé (Sloppy Toppy South)
+9. Brandon Schroedlé (Sloppy Toppy South)
 10. samburck58 (Sloppy Toppy South)
 11. awaidlich (Sloppy Toppy South)
 12. Bower Rangers (Horned Up North)`;
 
 const FALLBACK_ROSTER = `CARTER'S ROSTER (cartberr):
 STARTERS: Drake Maye (QB, NE, age 23), Travis Etienne (RB, NO, age 27), Braelon Allen (RB, NYJ, age 22), Nico Collins (WR, HOU, age 27), Jordan Addison (WR, MIN, age 24), Dalton Kincaid (TE, BUF, age 26), Ricky Pearsall (FLEX/WR, SF, age 25), Lamar Jackson (SF/QB, BAL, age 29)
-BENCH: Justin Herbert (QB, LAC, age 28), Jayden Higgins (WR, HOU, age 23), Jalen Coker (WR, CAR, age 24), Tank Bigsby (RB, PHI, age 24), Elijah Arroyo (TE, SEA, age 23), Trey Benson (RB, ARI, age 23), Ollie Gordon (RB, MIA, age 22), Jaylen Wright (RB, MIA, age 23), Rashod Bateman (WR, BAL, age 26), Ray Davis (RB, BUF, age 26), Ryan Flournoy (WR, DAL, age 26), Jaylin Lane (WR, WAS, age 24), Justice Hill (RB, BAL, age 28)
-KEY NOTES: Elite QB depth (Drake Maye + Lamar + Herbert). Young high-upside RB room. WR needs depth. TE is a weakness.`;
+BENCH: Justin Herbert (QB, LAC, age 28), Jayden Higgins (WR, HOU, age 23), Jalen Coker (WR, CAR, age 24), Tank Bigsby (RB, PHI, age 24), Elijah Arroyo (TE, SEA, age 23), Trey Benson (RB, ARI, age 23), Ollie Gordon (RB, MIA, age 22), Jaylen Wright (RB, MIA, age 23), Rashod Bateman (WR, BAL, age 26), Ray Davis (RB, BUF, age 26), Ryan Flournoy (WR, DAL, age 26), Jaylin Lane (WR, WAS, age 24), Justice Hill (RB, BAL, age 28)`;
 
+// Calls our Vercel serverless function instead of Anthropic directly
 async function claudeChat(apiKey, messages, rosterContext) {
   const system = LEAGUE_BASE_CONTEXT + "\n\n" + rosterContext + "\n\nBe conversational, direct, and opinionated like a knowledgeable fantasy football friend. Use emojis sparingly. Factor in SUPER_FLEX QB premium, IDP, and dynasty age curves.";
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch("/api/chat", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1024, system, messages }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages, system, apiKey }),
   });
   const data = await res.json();
-  if (data.error) throw new Error(data.error.message);
-  return data.content?.map(b => b.text || "").join("") || "";
+  if (data.error) throw new Error(data.error);
+  return data.text || "";
 }
 
 function Msg({ text }) {
@@ -78,7 +78,10 @@ export default function App() {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
   useEffect(() => {
-    if (taRef.current) { taRef.current.style.height = "auto"; taRef.current.style.height = Math.min(taRef.current.scrollHeight, 120) + "px"; }
+    if (taRef.current) {
+      taRef.current.style.height = "auto";
+      taRef.current.style.height = Math.min(taRef.current.scrollHeight, 120) + "px";
+    }
   }, [input]);
 
   function saveApiKey(key) {
@@ -105,10 +108,20 @@ export default function App() {
           return `${name} (${p.fantasy_positions?.[0] || p.position || "?"}, ${p.team || "FA"}, age ${p.age || "?"})`;
         }).filter(Boolean);
 
-        const myPicks = (picksData || []).filter(p => p.owner_id === myRoster.roster_id).map(p => `${p.season} Round ${p.round}`);
-        const picksAway = (picksData || []).filter(p => p.roster_id === myRoster.roster_id && p.owner_id !== myRoster.roster_id).map(p => `${p.season} Round ${p.round}`);
+        const myPicks = (picksData || [])
+          .filter(p => p.owner_id === myRoster.roster_id)
+          .map(p => `${p.season} Round ${p.round}`);
+        const picksAway = (picksData || [])
+          .filter(p => p.roster_id === myRoster.roster_id && p.owner_id !== myRoster.roster_id)
+          .map(p => `${p.season} Round ${p.round}`);
 
-        setRosterContext(`CARTER'S LIVE ROSTER (synced from Sleeper):\nPlayers: ${playerList.join(", ")}\nRecord: ${myRoster.settings?.wins || 0}-${myRoster.settings?.losses || 0}\nAcquired picks: ${myPicks.join(", ") || "none"}\nPicks traded away: ${picksAway.join(", ") || "none"}`);
+        setRosterContext(
+          `CARTER'S LIVE ROSTER (synced from Sleeper):\n` +
+          `Players: ${playerList.join(", ")}\n` +
+          `Record: ${myRoster.settings?.wins || 0}-${myRoster.settings?.losses || 0}\n` +
+          `Acquired picks: ${myPicks.join(", ") || "none"}\n` +
+          `Picks traded away: ${picksAway.join(", ") || "none"}`
+        );
       }
 
       setSyncStatus("synced");
@@ -157,7 +170,9 @@ export default function App() {
           <button onClick={syncLeague} disabled={syncStatus==="syncing"}
             style={{ fontSize:11, color:syncStatus==="synced"?"#16a34a":syncStatus==="error"?"#dc2626":"#6b7280", background:"none", border:"none", cursor:syncStatus==="syncing"?"default":"pointer", padding:0, display:"flex", alignItems:"center", gap:4 }}>
             <span style={{ display:"inline-block", animation:syncStatus==="syncing"?"spin 1s linear infinite":"none" }}>⟳</span>
-            {syncStatus==="syncing" ? (syncLog||"Syncing...") : syncStatus==="synced" ? `Synced ✓ ${lastSync?.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}` : syncStatus==="error" ? "Sync failed — retry" : "Sync league"}
+            {syncStatus==="syncing" ? (syncLog || "Syncing...") :
+             syncStatus==="synced" ? `Synced ✓ ${lastSync?.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}` :
+             syncStatus==="error" ? "Sync failed — retry" : "Sync league"}
           </button>
         </div>
 
@@ -257,4 +272,6 @@ export default function App() {
       `}</style>
     </div>
   );
+}
+
 }
